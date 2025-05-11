@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Psychology Chatbot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #chatBox {
+            border: 1px solid #ccc;
+            padding: 15px;
+            height: 400px;
+            overflow-y: scroll;
+            margin-bottom: 15px;
+            border-radius: 5px;
+        }
+        #userInput {
+            width: 60%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 15px;
+            margin-left: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #memoryBox {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Psychology Chatbot</h1>
+    <div id="chatBox"></div>
+    <div>
+        <input type="text" id="userInput" placeholder="Ask a psychology question..." autocomplete="off">
+        <button onclick="sendMessage()">Send</button>
+        <button onclick="speechToText()">🎤 Speak</button>
+        <button onclick="showMemory()">Show Memory</button>
+    </div>
+    <div id="memoryBox"></div>
+
+    <script>
+        async function sendMessage() {
+            const userInput = document.getElementById("userInput").value.trim();
+            if (!userInput) return;
+
+            addMessage("You", userInput);
+            document.getElementById("userInput").value = "";
+
+            try {
+                const response = await fetch("/send", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({message: userInput})
+                });
+
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+
+                const data = await response.json();
+                addMessage("Bot", data.response);
+                addListenButton(data.response);
+            } catch (error) {
+                console.error("Error:", error);
+                addMessage("Bot", "Sorry, I encountered an error. Please try again.");
+            }
+        }
+
+        async function speechToText() {
+            try {
+                addMessage("Bot", "Listening...");
+                const response = await fetch("/speech_to_text");
+                const data = await response.json();
+
+                if (data.text) {
+                    document.getElementById("userInput").value = data.text;
+                } else {
+                    addMessage("Bot", "I couldn't understand what you said.");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                addMessage("Bot", "Sorry, there was an error with speech recognition.");
+            }
+        }
+
+        function textToSpeech(text) {
+            fetch("/text_to_speech", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({text: text})
+            }).catch(error => console.error("TTS error:", error));
+        }
+
+        async function showMemory() {
+            try {
+                const response = await fetch("/get_memory");
+                const data = await response.json();
+                const memoryBox = document.getElementById("memoryBox");
+
+                if (memoryBox.style.display === "block") {
+                    memoryBox.style.display = "none";
+                    memoryBox.innerHTML = "";
+                } else {
+                    memoryBox.style.display = "block";
+                    if (data.chat_memory && data.chat_memory.length > 0) {
+                        let memoryHTML = "<h3>Conversation Memory</h3>";
+                        data.chat_memory.forEach(item => {
+                            memoryHTML += `<p><b>Q:</b> ${item.question}</p>`;
+                            memoryHTML += `<p><b>A:</b> ${item.answer}</p><hr>`;
+                        });
+                        memoryBox.innerHTML = memoryHTML;
+                    } else {
+                        memoryBox.innerHTML = "<p>No conversation history yet.</p>";
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching memory:", error);
+                document.getElementById("memoryBox").innerHTML = "<p>Error loading memory.</p>";
+            }
+        }
+
+        function addMessage(sender, message) {
+            const chatBox = document.getElementById("chatBox");
+            const messageElement = document.createElement("div");
+            messageElement.innerHTML = `<p><b>${sender}:</b> ${message}</p>`;
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function addListenButton(message) {
+            const chatBox = document.getElementById("chatBox");
+            const button = document.createElement("button");
+            button.textContent = "🔊 Listen";
+            button.style.marginLeft = "10px";
+            button.onclick = () => textToSpeech(message);
+            chatBox.lastChild.appendChild(button);
+        }
+
+        document.getElementById("userInput").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
